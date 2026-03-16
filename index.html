@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>tut</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" href="icons/icon-512.png">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: #000;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        .container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background-color: #000;
+        }
+
+        /* 相机预览 */
+        .camera-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        #videoElement {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* 轨迹层 */
+        #trajectoryCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        /* 顶部状态栏 */
+        .status-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(180deg, rgba(0,0,0,0.7) 0%, transparent 100%);
+            padding: 20px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .anchor-status {
+            color: #fff;
+            font-size: 14px;
+            font-weight: 500;
+            padding: 8px 12px;
+            border-radius: 20px;
+            background: rgba(255,255,255,0.2);
+            backdrop-filter: blur(10px);
+        }
+
+        .anchor-status.active {
+            background: rgba(52, 199, 89, 0.9);
+        }
+
+        .timer {
+            color: #fff;
+            font-size: 18px;
+            font-weight: 600;
+            padding: 8px 16px;
+            border-radius: 20px;
+            background: rgba(255,59,48,0.9);
+            display: none;
+        }
+
+        /* 锚点指示器 */
+        .anchor-point {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255,59,48,0.3);
+            border: 3px solid #ff3b30;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 50;
+            display: none;
+        }
+
+        .anchor-point::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ff3b30;
+        }
+
+        .anchor-point::after {
+            content: '锚点';
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #fff;
+            font-size: 12px;
+            font-weight: 500;
+            white-space: nowrap;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+        }
+
+        /* 移动提示 */
+        .movement-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(52, 199, 89, 0.9);
+            color: #fff;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: 600;
+            display: none;
+            z-index: 60;
+            animation: pulse 1s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            50% { opacity: 0.8; transform: translate(-50%, -50%) scale(1.05); }
+        }
+
+        /* 底部控制栏 */
+        .control-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(0deg, rgba(0,0,0,0.8) 0%, transparent 100%);
+            padding: 30px 20px 50px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            z-index: 100;
+        }
+
+        .btn {
+            border: none;
+            border-radius: 30px;
+            padding: 16px 24px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 120px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        .btn:active {
+            transform: scale(0.95);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #007AFF, #0055cc);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #0055cc, #0044aa);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ff3b30, #cc2d26);
+            color: #fff;
+        }
+
+        .btn-danger:hover {
+            background: linear-gradient(135deg, #cc2d26, #aa2120);
+        }
+
+        .btn-secondary {
+            background: rgba(255,255,255,0.2);
+            color: #fff;
+            backdrop-filter: blur(10px);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* 视频预览弹窗 */
+        .video-preview {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.95);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+
+        .video-preview.active {
+            display: flex;
+        }
+
+        .video-preview video {
+            width: 100%;
+            max-height: 60vh;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .video-preview .btn-group {
+            display: flex;
+            gap: 15px;
+        }
+
+        .tut-time-display {
+            color: #fff;
+            font-size: 18px;
+            font-weight: 600;
+            margin: 15px 0;
+            padding: 12px 20px;
+            background: rgba(52, 199, 89, 0.9);
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        /* 设置面板 */
+        .settings-panel {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.95);
+            display: none;
+            flex-direction: column;
+            z-index: 1000;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .settings-panel.active {
+            display: flex;
+        }
+
+        .settings-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .settings-title {
+            color: #fff;
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .settings-content {
+            color: #fff;
+        }
+
+        .setting-item {
+            background: rgba(255,255,255,0.1);
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 15px;
+        }
+
+        .setting-label {
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 10px;
+        }
+
+        .setting-value {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .setting-slider {
+            flex: 1;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255,255,255,0.2);
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .setting-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #007AFF;
+            cursor: pointer;
+        }
+
+        .setting-input {
+            width: 80px;
+            padding: 8px 12px;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 8px;
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            font-size: 16px;
+            text-align: center;
+        }
+
+        /* 加载提示 */
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            font-size: 18px;
+            z-index: 100;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* 权限请求弹窗 */
+        .permission-request {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.95);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .permission-request.active {
+            display: flex;
+        }
+
+        .permission-title {
+            color: #fff;
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+        .permission-text {
+            color: rgba(255,255,255,0.8);
+            font-size: 16px;
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="camera-container">
+            <video id="videoElement" autoplay playsinline></video>
+            <canvas id="trajectoryCanvas"></canvas>
+            <div class="anchor-point" id="anchorPoint"></div>
+            <div class="movement-indicator" id="movementIndicator">
+                ✓ 开始计时
+            </div>
+        </div>
+
+        <div class="status-bar">
+            <div class="anchor-status" id="anchorStatus">点击屏幕设置锚点</div>
+            <div class="timer" id="timer">00:00:00</div>
+        </div>
+
+        <div class="control-bar">
+            <button class="btn btn-secondary" id="clearAnchorBtn" disabled>清除锚点</button>
+            <button class="btn btn-primary" id="recordBtn">开始录制</button>
+            <button class="btn btn-secondary" id="settingsBtn">设置</button>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <div>正在初始化相机...</div>
+        </div>
+    </div>
+
+    <!-- 权限请求弹窗 -->
+    <div class="permission-request" id="permissionRequest">
+        <div class="permission-title">需要相机权限</div>
+        <div class="permission-text">
+            tut需要访问您的相机才能使用。<br><br>
+            请点击下方按钮授权，然后在弹出的权限请求中允许访问相机。
+        </div>
+        <button class="btn btn-primary" id="grantPermissionBtn">授权相机权限</button>
+    </div>
+
+    <!-- 视频预览弹窗 -->
+    <div class="video-preview" id="videoPreview">
+        <video id="previewVideo" playsinline controls></video>
+        <div class="tut-time-display" id="tutTimeDisplay">本次Tut时间：00:00:00</div>
+        <div class="btn-group">
+            <button class="btn btn-secondary" id="closePreviewBtn">关闭</button>
+            <button class="btn btn-primary" id="saveVideoBtn">保存视频</button>
+        </div>
+    </div>
+
+    <!-- 设置面板 -->
+    <div class="settings-panel" id="settingsPanel">
+        <div class="settings-header">
+            <div class="settings-title">设置</div>
+            <button class="btn btn-secondary" id="closeSettingsBtn" style="min-width: 80px;">关闭</button>
+        </div>
+        <div class="settings-content">
+            <div class="setting-item">
+                <div class="setting-label">移动检测灵敏度</div>
+                <div class="setting-value">
+                    <input type="range" class="setting-slider" id="sensitivitySlider" min="1" max="100" value="30">
+                    <span class="setting-input" id="sensitivityValue">30</span>
+                </div>
+            </div>
+            <div class="setting-item">
+                <div class="setting-label">检测区域大小</div>
+                <div class="setting-value">
+                    <input type="range" class="setting-slider" id="areaSlider" min="5" max="50" value="20">
+                    <span class="setting-input" id="areaValue">20</span>
+                </div>
+            </div>
+            <div class="setting-item">
+                <div class="setting-label">轨迹颜色</div>
+                <div class="setting-value">
+                    <select class="setting-input" id="colorSelect" style="width: 120px;">
+                        <option value="#ff3b30">红色</option>
+                        <option value="#34c759">绿色</option>
+                        <option value="#007aff">蓝色</option>
+                        <option value="#ff9500">橙色</option>
+                    </select>
+                </div>
+            </div>
+            <div class="setting-item">
+                <div class="setting-label">轨迹宽度</div>
+                <div class="setting-value">
+                    <input type="range" class="setting-slider" id="lineWidthSlider" min="1" max="10" value="3">
+                    <span class="setting-input" id="lineWidthValue">3</span>
+                </div>
+            </div>
+            <div class="setting-item">
+                <div class="setting-label">录制格式</div>
+                <div class="setting-value">
+                    <span class="setting-input" id="videoFormatDisplay" style="text-align: left; width: 200px;">检测中...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
